@@ -78,6 +78,8 @@ let draggingGUI = false
 let dragOffsetX = 0
 let dragOffsetY = 0
 
+let opacitySlider
+
 function setup() {
 
 	canvas = createCanvas(windowWidth, windowHeight)
@@ -122,6 +124,11 @@ function setup() {
 	stretchSlider = createSlider(0.2, 3, 1.5, 0.1)
 	stretchSlider.parent(gui)
 
+	createDiv("Opacity").parent(gui)
+
+	opacitySlider = createSlider(0, 100, 100, 1)
+	opacitySlider.parent(gui)
+
 	// ---------------- FILE INPUT ----------------
 
 	createDiv("Upload Video").parent(gui)
@@ -154,8 +161,8 @@ function setup() {
 function draw() {
 
 	clear()
-	
-	//createCanvas(1920, 1080)
+
+
 
 	// GUI drag
 	if(draggingGUI) {
@@ -183,11 +190,22 @@ function draw() {
 			let newDx = centerX - dw / 2
 			let newDy = centerY - dh / 2
 
-			copy(
+			push()
+
+			let factor = opacitySlider.value() / 100
+			let alpha = 255 * factor
+
+			tint(255, alpha)
+
+			image(
 				vid,
 				t.sx, t.sy, t.sw, t.sh,
 				newDx, newDy, dw, dh
 			)
+
+			pop()†€
+
+			pop()
 		}
 	}
 }
@@ -236,7 +254,7 @@ function handleFile(file) {
 
 function startRecording() {
 
-	if (!canvas || !canvas.elt.captureStream) return
+	if(!canvas || !canvas.elt.captureStream) return
 
 	chunks = []
 
@@ -244,9 +262,9 @@ function startRecording() {
 
 	let options = {}
 
-	if (MediaRecorder.isTypeSupported("video/webm; codecs=vp9")) {
+	if(MediaRecorder.isTypeSupported("video/webm; codecs=vp9")) {
 		options.mimeType = "video/webm; codecs=vp9"
-	} else if (MediaRecorder.isTypeSupported("video/webm; codecs=vp8")) {
+	} else if(MediaRecorder.isTypeSupported("video/webm; codecs=vp8")) {
 		options.mimeType = "video/webm; codecs=vp8"
 	}
 
@@ -257,7 +275,7 @@ function startRecording() {
 	recorder.videoBitsPerSecond = 30000000
 
 	recorder.ondataavailable = e => {
-		if (e.data.size > 0) chunks.push(e.data)
+		if(e.data.size > 0) chunks.push(e.data)
 	}
 
 	recorder.onstop = saveVideo
@@ -332,7 +350,9 @@ function makeTile(i) {
 	let dx = randomWithSeed(seed + 4, 0, width)
 	let dy = randomWithSeed(seed + 5, 0, height)
 
-	return { sx, sy, sw, sh, dx, dy }
+	let alpha = randomWithSeed(seed + 6, 80, 255)
+
+	return { sx, sy, sw, sh, dx, dy, alpha }
 }
 </script>
 
