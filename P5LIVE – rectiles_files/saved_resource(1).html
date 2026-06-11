@@ -1,0 +1,629 @@
+
+<!-- saved from url=(0012)about:srcdoc -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<title>P5LIVE – sketch</title>
+	
+	<style type="text/css">
+		body{
+			margin:0;
+			width:100vw;
+			height:100vh;
+			overflow:hidden;
+			cursor:crosshair;
+/*			cursor:none;*/
+		}
+		canvas{
+			position:absolute;
+			width:100vw;
+			height:100vh;
+			margin:0;
+		}
+		.p5Canvas{
+			position:fixed;
+			top:0;
+			z-index:-1
+		}
+		input{
+			cursor:crosshair;
+		}
+	</style>
+	<script src="http://localhost:5001/includes/js/loadjs.min.js"></script>
+	<script src="http://localhost:5001/includes/utils/p5live-audio.js?3"></script>
+	<script src="http://localhost:5001/includes/utils/p5live-midi.js?4"></script>
+
+	<script type="text/javascript">
+		var p5p = parent.document;
+		var p5console = p5p.getElementById('p5-console');
+		var p5code = p5p.getElementById('p5-code');
+		var pmsg = '';
+		var chalkboard;
+
+		function pingReady(scriptName, scriptCode, scriptCallback){
+			window.parent.pongReady(scriptName, scriptCode, scriptCallback);
+		}
+
+		markLine();
+
+		// pass errors to parent
+		window.onerror = function myErrorHandler(errorMsg, url, lineNumber) {
+			if(parent.p5l.console){
+				p5console.style.display = 'block'
+			}
+			p5console.value = errorMsg; // lineNumber +" / "+
+			p5console.style.background = "#000";
+			markLine(lineNumber);
+			return false;
+		}
+
+		function markLine(n){
+			var myCustomData = {};
+			if(n != null){
+				myCustomData = { 'lineNumber': n }
+			}
+			var event = new CustomEvent('p5Status', { detail: myCustomData });
+			window.parent.document.dispatchEvent(event);
+		}
+
+		var statusTimer;
+		function sketchStatus(){
+			if(p5.instance._setupDone){
+				clearTimeout(statusTimer);
+				var myCustomData = {'status': true};
+				var event = new CustomEvent('p5Status', { detail: myCustomData });
+				window.parent.document.dispatchEvent(event);
+				// console.log('ready')
+				appendToFunction('noCursor', ()=>{document.body.style.cursor = 'none'})
+				appendToFunction('cursor', ()=>{document.body.style.cursor = 'crosshair'})
+			}else{
+				statusTimer = setTimeout(function(){sketchStatus();}, 50);
+			}
+		}
+
+		function appendToFunction(fn, callback) {
+		  window[fn] = (function(fn){
+		    return function() {
+		      fn();
+		      callback();
+		    }
+		 }(window[fn]));
+		}
+
+		// pass console.log's to parent
+		// https://stackoverflow.com/questions/7042611/override-console-log-for-production#comment121220200_7042634
+		var console = console || {}; console.log = function(m){
+			if(m != "p5.RendererGL: enabled webgl context"){
+					consoleMessage(m, .5);
+
+					// only send to window console if unique!
+					if(m != pmsg){
+						window.parent.console.log(m); // also send to parent console!
+						if(window.parent.syncdataConsoleMsg !== undefined){
+							window.parent.syncdataConsoleMsg(m); // also send to syncdata console!
+						}
+						pmsg = m;
+					}					
+				}
+		};
+
+		function consoleMessage(msg, timeDelay){
+			parent.consoleMessage(msg, timeDelay)
+		}
+
+
+		// iFrame got focus()?!
+		document.onkeydown = function(event){
+			// on CONTROL, return focus and activate CONTROL
+			if(event.keyCode == 17){
+				window.setTimeout(function(){
+					window.parent.focus();
+					window.parent.dispatchEvent(new KeyboardEvent('keydown',{'keyCode':17}));
+					// console.log('CTRL DOWN')
+					window.setTimeout(function(){
+						window.parent.dispatchEvent(new KeyboardEvent('keyup',{'keyCode':17}));
+						// console.log('CTRL UP')
+					}, 100);
+				}, 0);
+			}
+		}
+
+		// document.onkeyup = function(event){
+		// 	if(event.keyCode == 17){
+		// 		window.parent.focus();
+		// 		window.setTimeout(function(){
+		// 			window.parent.dispatchEvent(new KeyboardEvent('keyup',{'keyCode':17}));
+		// 			console.log('CTRL UP')
+		// 		}, 0);
+		// 	}
+		// }
+
+		// test if focus lost
+		window.onfocus = function() {
+		  // console.log('stole lost!');
+			if(typeof window.p5 == "object"){
+				loop();
+			}
+		};
+
+		let pointerEvents = ['mousemove', 'mouseup', 'mousedown', 'pointerdown', 'pointerup', 'pointermove', 'dragend', 'dragover', 'click', 'dblclick', 'wheel']
+
+		for(let p of pointerEvents){
+			document.addEventListener(p, forwardMouse);
+		}
+
+		function forwardMouse(event){
+			// window.parent.passPointer(event, 'sketch');
+		}
+
+		// document.addEventListener('keydown', forwardKey);
+		// document.addEventListener('keyup', forwardKey);
+
+		function forwardKey(event){
+			window.parent.sendKey(event);
+		}
+
+		// sync data
+		function sendData(obj){
+			window.parent.syncdataSend(obj);
+		}
+
+		function getData(obj){
+			// placeholder function;
+		}
+
+		function parseData(obj){
+			// placeholder function;
+		}
+
+		
+
+		// chalkboard
+		var p5live = {};
+		p5live.chalkboard = function(chalkboardSketch){
+			if(parent.chalkboardInit){
+				// console.log(JSON.stringify(parent.chalkboardFrame.layer))
+				let chalkboard = parent.chalkboardFrame.chalkboard;
+				let chalkboardSelected = parent.chalkboardFrame.chalkboardSel;
+				if(chalkboardSketch !== undefined){
+					chalkboardSelected = Math.floor(chalkboardSketch)%10;
+				}
+				return chalkboard[chalkboardSelected];
+			}else{
+				return createGraphics(4, 4);
+			}
+		}
+
+		p5live.code = function(){
+			return parent.getEditor()
+		}
+
+		p5live.recompile = function(){
+			return parent.recompile(true)
+		}
+
+		// check/add if saveHTML?
+		p5live.fullCanvas = function(autoHeight = false){
+			let style = document.createElement('style');
+			style.innerText  = `canvas{width:100vw !important; height:${autoHeight ? 'auto':'100vh'} !important;object-fit: container;image-rendering: pixelated;}`;
+			document.body.appendChild(style);
+		}
+
+	</script>
+<script type="text/javascript" src="http://localhost:5001/includes/p5/p5.min.js"></script><script type="text/javascript" src="http://localhost:5001/includes/p5/addons/p5.sound.min.js"></script><script type="text/javascript">var __loopBreaker = (function() {
+  var loops = {};
+
+  return {
+    check: function(i) {
+      if (!loops[i]) {
+        loops[i] = {startTime: Date.now(), count: 0}
+      }
+      var loop = loops[i];
+
+      if (loop.safe) {
+        return;
+      }
+
+      loop.count += 1;
+
+      if (loop.count % 100 === 0) {
+        // Date math is slow, so only check every 100 loops
+        if (Date.now() - loop.startTime > 1000) {
+          throw "infinite/slow loop! Find bug or add '// noprotect' to override...";
+        }
+      }
+
+      if (loop.count > 10000) {
+        throw "infinite/slow loop! Find bug or add '// noprotect' to override...";
+      }
+    },
+
+    markSafe: function(i) {
+      if (!loops[i]) {
+        loops[i] = {};
+      }
+
+      loops[i].safe = true;
+    }
+  };
+}());
+function startRecording() {
+
+	if (!canvas || !canvas.elt.captureStream) return
+
+	chunks = []
+
+	let stream = canvas.elt.captureStream(60)
+
+	let options = {}
+
+	if (MediaRecorder.isTypeSupported("video/webm; codecs=vp9")) {
+		options.mimeType = "video/webm; codecs=vp9"
+	} else if (MediaRecorder.isTypeSupported("video/webm; codecs=vp8")) {
+		options.mimeType = "video/webm; codecs=vp8"
+	}
+
+	// ALWAYS create recorder (this was your bug)
+	recorder = new MediaRecorder(stream, options)
+
+	// HQ upgrade
+	recorder.videoBitsPerSecond = 30000000
+
+	recorder.ondataavailable = e => {
+		if (e.data.size > 0) chunks.push(e.data)
+	}
+
+	recorder.onstop = saveVideo
+
+	recorder.start()
+
+	recording = true
+
+	startRecButton.html("RECORDING...")
+}</script></head>
+<body style="background: rgb(0, 0, 0);">
+
+
+<script type="text/javascript">/* CUSTOM FUNCTIONS FOR P5LIVE */
+// keep fullscreen if window resized
+function windowResized() {
+	resizeCanvas(windowWidth, windowHeight);
+}
+
+// custom ease function
+function ease(iVal, oVal, eVal){
+	return oVal += (iVal - oVal) * eVal;
+}
+
+// processing compatibility
+function println(msg){
+	print(msg);
+}
+var __loopBreaker = (function() {
+  var loops = {};
+
+  return {
+    check: function(i) {
+      if (!loops[i]) {
+        loops[i] = {startTime: Date.now(), count: 0}
+      }
+      var loop = loops[i];
+
+      if (loop.safe) {
+        return;
+      }
+
+      loop.count += 1;
+
+      if (loop.count % 100 === 0) {
+        // Date math is slow, so only check every 100 loops
+        if (Date.now() - loop.startTime > 1000) {
+          throw "infinite/slow loop! Find bug or add '// noprotect' to override...";
+        }
+      }
+
+      if (loop.count > 10000) {
+        throw "infinite/slow loop! Find bug or add '// noprotect' to override...";
+      }
+    },
+
+    markSafe: function(i) {
+      if (!loops[i]) {
+        loops[i] = {};
+      }
+
+      loops[i].safe = true;
+    }
+  };
+}());
+let recorder
+let chunks = []
+let recording = false
+
+let canvas
+
+let vid
+let input
+
+let tiles = []
+let compSeed = 0
+
+let countSlider
+let scaleSlider
+let stretchSlider
+let button
+let startRecButton
+let stopRecButton
+
+let gui
+let guiHeader
+let draggingGUI = false
+let dragOffsetX = 0
+let dragOffsetY = 0
+
+function setup() {
+
+	canvas = createCanvas(windowWidth, windowHeight)
+
+	// ---------------- GUI PANEL ----------------
+
+	gui = createDiv()
+	gui.position(20, 20)
+
+	gui.style("background", "rgba(15,15,15,0.75)")
+	gui.style("padding", "16px")
+	gui.style("border-radius", "16px")
+	gui.style("border", "1px solid rgba(255,255,255,0.2)")
+	gui.style("color", "white")
+	gui.style("font-family", "sans-serif")
+	gui.style("width", "220px")
+	gui.style("user-select", "none")
+
+	guiHeader = createDiv("GLITCH CONTROL")
+	guiHeader.parent(gui)
+	guiHeader.style("font-weight", "bold")
+	guiHeader.style("margin-bottom", "10px")
+	guiHeader.style("cursor", "move")
+
+	guiHeader.mousePressed(startDraggingGUI)
+
+	// ---------------- SLIDERS ----------------
+
+	createDiv("Rectangles").parent(gui)
+
+	countSlider = createSlider(5, 200, 20)
+	countSlider.parent(gui)
+	countSlider.input(generateTiles)
+
+	createDiv("Scale").parent(gui)
+
+	scaleSlider = createSlider(0.5, 2, 0.5, 0.1)
+	scaleSlider.parent(gui)
+
+	createDiv("Stretch").parent(gui)
+
+	stretchSlider = createSlider(0.2, 3, 1.5, 0.1)
+	stretchSlider.parent(gui)
+
+	// ---------------- FILE INPUT ----------------
+
+	createDiv("Upload Video").parent(gui)
+
+	input = createFileInput(handleFile)
+	input.parent(gui)
+
+	// ---------------- BUTTONS ----------------
+
+	button = createButton("New Composition")
+	button.parent(gui)
+
+	button.mousePressed(() => {
+		compSeed = random(100000)
+		tiles = []
+		generateTiles()
+	})
+
+	startRecButton = createButton("Start Recording")
+	startRecButton.parent(gui)
+	startRecButton.mousePressed(startRecording)
+
+	stopRecButton = createButton("Stop Recording")
+	stopRecButton.parent(gui)
+	stopRecButton.mousePressed(stopRecording)
+
+	background(0)
+
+	if(typeof myP5 == "object"){
+		pmouseX=218;
+		pmouseY=494;
+		mouseX=218;
+		mouseY=494;
+		frameCount=1639;
+	}
+
+}
+
+function draw() {
+
+	clear()
+	
+	//createCanvas(1920, 1080)
+
+	// GUI drag
+	if(draggingGUI) {
+		gui.position(
+			mouseX - dragOffsetX,
+			mouseY - dragOffsetY
+		)
+	}
+
+	if(vid) {
+
+		image(vid, 0, 0, width, height)
+
+		let scale = scaleSlider.value()
+		let stretch = stretchSlider.value()
+
+		for(let t of tiles) {
+
+			let dw = t.sw * scale * stretch
+			let dh = t.sh * scale
+
+			let centerX = t.dx + t.sw / 2
+			let centerY = t.dy + t.sh / 2
+
+			let newDx = centerX - dw / 2
+			let newDy = centerY - dh / 2
+
+			copy(
+				vid,
+				t.sx, t.sy, t.sw, t.sh,
+				newDx, newDy, dw, dh
+			)
+		}
+	}
+}
+
+// ---------------- GUI DRAG ----------------
+
+function startDraggingGUI() {
+
+	draggingGUI = true
+
+	let pos = gui.position()
+
+	dragOffsetX = mouseX - pos.x
+	dragOffsetY = mouseY - pos.y
+}
+
+function mouseReleased() {
+	draggingGUI = false
+}
+
+// ---------------- VIDEO ----------------
+
+function handleFile(file) {
+
+	if(file.type === "video") {
+
+		if(vid) vid.remove()
+
+		vid = createVideo([file.data])
+
+		vid.hide()
+		vid.volume(0)
+		vid.loop()
+
+		vid.elt.onloadedmetadata = () => {
+
+			compSeed = random(100000)
+			tiles = []
+
+			generateTiles()
+		}
+	}
+}
+
+// ---------------- RECORDING ----------------
+
+function startRecording() {
+
+	if (!canvas || !canvas.elt.captureStream) return
+
+	chunks = []
+
+	let stream = canvas.elt.captureStream(60)
+
+	let options = {}
+
+	if (MediaRecorder.isTypeSupported("video/webm; codecs=vp9")) {
+		options.mimeType = "video/webm; codecs=vp9"
+	} else if (MediaRecorder.isTypeSupported("video/webm; codecs=vp8")) {
+		options.mimeType = "video/webm; codecs=vp8"
+	}
+
+	// ALWAYS create recorder (this was your bug)
+	recorder = new MediaRecorder(stream, options)
+
+	// HQ upgrade
+	recorder.videoBitsPerSecond = 30000000
+
+	recorder.ondataavailable = e => {
+		if (e.data.size > 0) chunks.push(e.data)
+	}
+
+	recorder.onstop = saveVideo
+
+	recorder.start()
+
+	recording = true
+
+	startRecButton.html("RECORDING...")
+}
+
+function stopRecording() {
+
+	if(recorder && recording) {
+		recorder.stop()
+		recording = false
+
+		startRecButton.html("Start Recording")
+	}
+
+
+}
+
+function saveVideo() {
+
+	let blob = new Blob(chunks, { type: "video/webm" })
+	let url = URL.createObjectURL(blob)
+
+	let a = document.createElement("a")
+	a.href = url
+	a.download = "glitch-export.webm"
+	a.click()
+
+	URL.revokeObjectURL(url)
+}
+
+// ---------------- TILE SYSTEM ----------------
+
+function generateTiles() {
+    if(!vid) return
+
+    let targetCount = countSlider.value()
+
+    for(let i = tiles.length; i < targetCount; i++) {
+        __loopBreaker.check(0);
+        tiles.push(makeTile(i))
+    }
+
+    if(tiles.length > targetCount) {
+		tiles.length = targetCount
+	}
+    __loopBreaker.markSafe(0);
+}
+
+function randomWithSeed(seed, min, max) {
+
+	let x = Math.sin(seed) * 10000
+	x = x - Math.floor(x)
+
+	return min + x * (max - min)
+}
+
+function makeTile(i) {
+
+	let seed = compSeed + i * 9999
+
+	let sw = randomWithSeed(seed, 80, 300)
+	let sh = randomWithSeed(seed + 1, 80, 300)
+
+	let sx = randomWithSeed(seed + 2, 0, vid.width - sw)
+	let sy = randomWithSeed(seed + 3, 0, vid.height - sh)
+
+	let dx = randomWithSeed(seed + 4, 0, width)
+	let dy = randomWithSeed(seed + 5, 0, height)
+
+	return { sx, sy, sw, sh, dx, dy }
+}
+
+var myP5 = new p5(); sketchStatus();</script><main><canvas id="defaultCanvas0" class="p5Canvas" width="2984" height="1514" style="width: 1492px; height: 757px;"></canvas></main><div style="position: absolute; left: 20px; top: 20px; background: rgba(15, 15, 15, 0.75); padding: 16px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.2); color: white; font-family: sans-serif; width: 220px; user-select: none;"><div style="font-weight: bold; margin-bottom: 10px; cursor: move;">GLITCH CONTROL</div><div>Rectangles</div><input type="range" min="5" max="200"><div>Scale</div><input type="range" min="0.5" max="2" step="0.1"><div>Stretch</div><input type="range" min="0.2" max="3" step="0.1"><div>Upload Video</div><input type="file"><button>New Composition</button><button>Start Recording</button><button>Stop Recording</button></div></body></html>
