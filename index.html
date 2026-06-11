@@ -192,20 +192,18 @@ function draw() {
 
 			push()
 
-			let factor = opacitySlider.value() / 100
-			let alpha = 255 * factor
+			let alpha = 255 * (opacitySlider.value() / 100)
 
 			tint(255, alpha)
 
 			image(
 				vid,
-				t.sx, t.sy, t.sw, t.sh,
-				newDx, newDy, dw, dh
+				newDx, newDy, dw, dh,
+				t.sx, t.sy, t.sw, t.sh
 			)
 
 			pop()
 
-			pop()
 		}
 	}
 }
